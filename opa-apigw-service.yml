@@ -1,0 +1,86 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Self-service API gateway for testing and security solutions'
+
+Resources:
+  # Create the API Gateway for the self-service API
+  SelfServiceAPIGateway:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: 'SelfServiceAPIGateway'
+      Description: 'API gateway for testing and security solutions'
+      EndpointConfiguration:
+        Types:
+          - 'EDGE'
+  
+  # Create the API Gateway Deployment for the self-service API
+  SelfServiceAPIGatewayDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: 'SelfServiceAPIGatewayMethod'
+    Properties:
+      RestApiId: !Ref 'SelfServiceAPIGateway'
+      StageName: 'dev'
+  
+  # Create the API Gateway Method for the self-service API
+  SelfServiceAPIGatewayMethod:
+    Type: 'AWS::ApiGateway::Method'
+    DependsOn: 'SelfServiceAPIGatewayResource'
+    Properties:
+      RestApiId: !Ref 'SelfServiceAPIGateway'
+      ResourceId: !Ref 'SelfServiceAPIGatewayResource'
+      HttpMethod: 'POST'
+      AuthorizationType: 'NONE'
+      Integration:
+        Type: 'AWS_PROXY'
+        IntegrationHttpMethod: 'POST'
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations'
+        PassthroughBehavior: 'WHEN_NO_TEMPLATES'
+      MethodResponses:
+        - StatusCode: '200'
+  
+  # Create the API Gateway Resource for the self-service API
+  SelfServiceAPIGatewayResource:
+    Type: 'AWS::ApiGateway::Resource'
+    DependsOn: 'SelfServiceAPIGateway'
+    Properties:
+      ParentId: !GetAtt 'SelfServiceAPIGateway.RootResourceId'
+      RestApiId: !Ref 'SelfServiceAPIGateway'
+      PathPart: 'test'
+  
+  # Create the Lambda Function for the self-service API
+  LambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'SelfServiceAPIFunction'
+      Runtime: 'python3.8'
+      Handler: 'lambda_function.lambda_handler'
+      Code:
+        ZipFile: |
+          import json
+          
+          def lambda_handler(event, context):
+              # Define the AWS CLI command for running the static analysis on Kubernetes manifests
+              aws_cli_command = 'aws s3 cp s3://my-bucket/opa-policies/ /tmp/opa-policies/ --recursive && opa eval /tmp/opa-policies/ --input /dev/stdin --data /dev/null --format pretty'
+              
+              # Extract the Kubernetes manifests from the API request
+              manifests = event['body']
+              
+              # Run the static analysis on the Kubernetes manifests
+              process = subprocess.Popen(aws_cli_command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+              stdout, stderr = process.communicate(input=manifests.encode())
+              
+              # Return the results of the static analysis to the API response
+              return {
+                  'statusCode': 200,
+                  'body': stdout.decode()
+              }
+      Timeout: 300
+      MemorySize: 256
+      Role: !GetAtt 'LambdaExecutionRole.Arn'
+  
+  # Create the IAM Role for the Lambda Function
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'SelfServiceAPIRole'
+      AssumeRolePolicyDocument:
