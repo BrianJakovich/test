@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  # Define the pipeline role
+  PipelineRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'codepipeline.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+        - PolicyName: 'PipelinePolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetBucketVersioning'
+                  - 's3:GetBucketLocation'
+                  - 's3:ListBucket'
+                  - 's3:PutObject'
+                  - 's3:PutBucketVersioning'
+                  - 's3:PutBucketNotification'
+                Resource:
+                  - !Join ['', ['arn:aws:s3:::', !Ref PipelineBucket]]
+                  - !Join ['', ['arn:aws:s3:::', !Ref PipelineBucket, '/*']]
+              - Effect: 'Allow'
+                Action:
+                  - 'cloudformation:*'
+                  - 'codedeploy:*'
+                  - 'lambda:*'
+                  - 'ec2:*'
+                  - 'iam:*'
+                  - 'ecs:*'
+                Resource: '*'
+  # Define the pipeline bucket
+  PipelineBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: 'my-pipeline-bucket'
+      VersioningConfiguration:
+        Status: 'Enabled'
+  # Define the pipeline
+  MyAppPipeline:
+    Type: 'AWS::CodePipeline::Pipeline'
+    Properties:
+      Name: 'MyAppPipeline'
+      RoleArn: !GetAtt PipelineRole.Arn
+      ArtifactStore:
+        Type: 'S3'
+        Location: !Ref PipelineBucket
+      Stages:
+        # Define the source stage
+        - Name: 'Source'
+          Actions:
+            - Name: 'SourceAction'
+              ActionTypeId:
+                Category: 'Source'
+                Owner: 'AWS'
+                Version: '1'
+                Provider: 'CodeCommit'
+              Configuration:
+                RepositoryName: 'myapp-repo'
+                BranchName: 'main'
+              OutputArtifacts:
+                - Name: 'SourceOutput'
+              RunOrder: 1
+        # Define the build stage
+        - Name: 'Build'
+          Actions:
+            - Name: 'BuildAction'
+              ActionTypeId:
+                Category: 'Build'
+                Owner: 'AWS'
+                Version: '1'
+                Provider: 'CodeBuild'
+              Configuration:
+                ProjectName: 'MyAppBuild'
+              InputArtifacts:
+                - Name: 'SourceOutput'
+              OutputArtifacts:
+                - Name: 'BuildOutput'
+              RunOrder: 2
+        # Define the deploy stage
+        - Name: 'Deploy'
+          Actions:
+            - Name: 'DeployAction'
+              ActionTypeId:
+                Category: 'Deploy'
+                Owner: 'AWS'
+                Version: '1'
+                Provider: 'CodeDeploy'
+              Configuration:
+                ApplicationName: 'MyApp'
+                DeploymentGroupName: 'MyAppGroup'
+              InputArtifacts:
+                - Name: 'BuildOutput'
+              RunOrder: 3
