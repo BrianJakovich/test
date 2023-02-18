@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  # Define the pipeline product
+  MyAppPipelineProduct:
+    Type: 'AWS::ServiceCatalog::CloudFormationProduct'
+    Properties:
+      Name: 'MyApp Pipeline'
+      Description: 'A self-service pipeline for deploying MyApp'
+      Owner: 'Global Payments'
+      ProvisioningArtifactParameters:
+        - Description: 'MyApp pipeline artifact'
+          Info:
+            LoadTemplateFromURL: 'https://s3.amazonaws.com/my-bucket/my-pipeline.yaml'
+          Name: 'MyApp Pipeline'
+          Type: 'CLOUD_FORMATION_TEMPLATE'
+      SupportDescription: 'Contact us at support@globalpayments.com for assistance.'
+      SupportEmail: 'support@globalpayments.com'
+      SupportUrl: 'https://www.globalpayments.com/contact-us'
+  # Define the pipeline product version
+  MyAppPipelineProductVersion:
+    Type: 'AWS::ServiceCatalog::CloudFormationProductVersion'
+    Properties:
+      ProductId: !Ref MyAppPipelineProduct
+      ProvisioningArtifactName: 'MyApp Pipeline v1.0'
+      ProvisioningArtifactDescription: 'Initial version of the MyApp Pipeline'
+      Active: true
