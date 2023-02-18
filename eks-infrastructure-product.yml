@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  # Define the EKS cluster
+  MyEksCluster:
+    Type: 'AWS::EKS::Cluster'
+    Properties:
+      Name: 'my-eks-cluster'
+      RoleArn: !GetAtt EksServiceRole.Arn
+      Version: '1.17'
+      ResourcesVpcConfig:
+        SubnetIds:
+          - !Ref PublicSubnet1
+          - !Ref PublicSubnet2
+        SecurityGroupIds:
+          - !Ref EksSecurityGroup
+  # Define the Fargate profile
+  MyFargateProfile:
+    Type: 'AWS::EKS::FargateProfile'
+    Properties:
+      ClusterName: !Ref MyEksCluster
+      Name: 'my-fargate-profile'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Selectors:
+        - Namespace: 'default'
+          Labels:
+            env: 'production'
+  # Define the EKS service role
+  EksServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - 'eks.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonEKSClusterPolicy'
+        - 'arn:aws:iam::aws:policy/AmazonEKSServicePolicy'
+  # Define the security group
+  EksSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: 'eks-security-group'
+      GroupDescription: 'Security group for EKS cluster'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref EksWorkerSecurityGroup
+      Tags:
+        - Key: 'Name'
+          Value: 'eks-security-group'
+  # Define the worker security group
+  EksWorkerSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: 'eks-worker-security-group'
+      GroupDescription: 'Security group for EKS worker nodes'
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: 'Name'
+          Value: 'eks-worker-security-group'
