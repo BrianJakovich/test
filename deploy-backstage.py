@@ -95,3 +95,19 @@ config = {
 config_yaml = yaml.dump(config)
 kubectl.stdin.write(f'create secret generic {backstage_config_secret} --from-literal=config.yaml="{config_yaml}" -n {backstage_namespace}\n'.encode())
 kubectl.communicate()
+
+# Update the Kubernetes deployment for Backstage with the Docker registry secret and the Backstage configuration secret
+kubectl.stdin.write(f'set image deployment/backstage backstage=ghcr.io/backstage/backstage:v{backstage_version} -n {backstage_namespace}\n'.encode())
+kubectl.stdin.write(f'set env deployment/backstage --from=secret/{backstage_config_secret} -n {backstage_namespace}\n'.encode())
+kubectl.stdin.write(f'set env deployment/backstage --from=secret/{docker_registry_secret} -n {backstage_namespace}\n'.encode())
+kubectl.communicate()
+
+# Expose the Backstage deployment with a Kubernetes service and ingress
+kubectl.stdin.write(f'expose deployment backstage --port=80 -n {backstage_namespace}\n'.encode())
+kubectl.stdin.write(f'create ingress backstage --class=alb --rules="host:backstage.example.com,path:/,backend:service:backstage,serviceName:backstage,servicePort:80" -n {backstage_namespace}\n'.encode())
+kubectl.communicate()
+
+# Get the Kubernetes ingress endpoint
+response = eks.describe_cluster(name=cluster_name)
+ingress_endpoint = response['resourcesVpcConfig']['clusterSecurityGroupId']
+print(f'Backstage is available at https://{ingress_endpoint}')
